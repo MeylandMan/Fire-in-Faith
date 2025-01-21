@@ -20,6 +20,8 @@ extends CharacterBody3D
 @export var acceleration : float = 10.0
 ## How high the player jumps.
 @export var jump_velocity : float = 4.5
+#How fast the player can exceed in slide mode
+@export var slide_multiplier : float = 1.0
 ## How far the player turns when the mouse is moved.
 @export var mouse_sensitivity : float = 0.1
 ## Invert the Y input for mouse and joystick
@@ -37,6 +39,7 @@ extends CharacterBody3D
 @export var JUMP_ANIMATION : AnimationPlayer
 @export var CROUCH_ANIMATION : AnimationPlayer
 @export var COLLISION_MESH : CollisionShape3D
+@export var PREV_STATE_TIMER : Timer
 
 @export_group("Controls")
 # We are using UI controls because they are built into Godot Engine so they can be used right away
@@ -64,6 +67,7 @@ extends CharacterBody3D
 @export var motion_smoothing : bool = true
 @export var sprint_enabled : bool = true
 @export var crouch_enabled : bool = true
+@export var slide_enabled : bool = true
 @export_enum("Hold to Crouch", "Toggle Crouch") var crouch_mode : int = 0
 @export_enum("Hold to Sprint", "Toggle Sprint") var sprint_mode : int = 0
 ## Wether sprinting should effect FOV.
@@ -87,6 +91,7 @@ var current_speed : float = 0.0
 var state : String = "normal"
 var low_ceiling : bool = false # This is for when the cieling is too low and the player needs to crouch.
 var was_on_floor : bool = true # Was the player on the floor last frame (for landing animation)
+var prev_state : String = state
 
 # The reticle should always have a Control node as the root
 var RETICLE : Control
@@ -205,12 +210,12 @@ func _physics_process(delta):
 func handle_jumping():
 	if jumping_enabled:
 		if continuous_jumping: # Hold down the jump button
-			if Input.is_action_pressed(JUMP) and is_on_floor() and !low_ceiling:
+			if Input.is_action_pressed(JUMP) and is_on_floor() and !low_ceiling and state != "sliding":
 				if jump_animation:
 					JUMP_ANIMATION.play("jump", 0.25)
 				velocity.y += jump_velocity # Adding instead of setting so jumping on slopes works properly
 		else:
-			if Input.is_action_just_pressed(JUMP) and is_on_floor() and !low_ceiling:
+			if Input.is_action_just_pressed(JUMP) and is_on_floor() and !low_ceiling and state != "sliding":
 				if jump_animation:
 					JUMP_ANIMATION.play("jump", 0.25)
 				velocity.y += jump_velocity
@@ -276,7 +281,7 @@ func handle_state(moving):
 	
 	if crouch_enabled:
 		if crouch_mode == 0:
-			if Input.is_action_pressed(CROUCH):
+			if Input.is_action_pressed(CROUCH) and state != "sprinting":
 				if state != "crouching":
 					enter_crouch_state()
 			elif state == "crouching" and !$CrouchCeilingDetection.is_colliding():
@@ -289,36 +294,73 @@ func handle_state(moving):
 					"crouching":
 						if !$CrouchCeilingDetection.is_colliding():
 							enter_normal_state()
+	if state == "crouching":
+		speed = crouch_speed
+	
+	if slide_enabled:
+		if Input.is_action_just_pressed("crouch") and prev_state == "sprinting":
+			slide_multiplier = 1.0
+			enter_slide_state()
+			
+		if state == "sliding":
+			if(Input.is_action_just_pressed("ui_accept")):
+				if !$CrouchCeilingDetection.is_colliding():
+					enter_normal_state()
+				else:
+					set_state("crouching")
+					enter_crouch_state()
+			#print("slide multiplier : " + str(slide_multiplier))
+			speed = sprint_speed * slide_multiplier
+			if(slide_multiplier < 0.2):
+				if !$CrouchCeilingDetection.is_colliding():
+					enter_normal_state()
+				else:
+					set_state("crouching")
+					enter_crouch_state()
+			else:
+				slide_multiplier -= 0.005
 
 
 # Any enter state function should only be called once when you want to enter that state, not every frame.
+
+func set_state(st: String):
+	PREV_STATE_TIMER.start(0.2)
+	state = st
 
 func enter_normal_state():
 	#print("entering normal state")
 	var prev_state = state
 	if prev_state == "crouching":
 		CROUCH_ANIMATION.play_backwards("crouch")
-	state = "normal"
+	if prev_state == "sliding":
+		CROUCH_ANIMATION.play_backwards("slide")
+	set_state("normal")
 	speed = base_speed
 
 func enter_crouch_state():
 	#print("entering crouch state")
-	if(state != "sprinting"):
-		var prev_state = state
-		state = "crouching"
-		speed = crouch_speed
-		CROUCH_ANIMATION.play("crouch")
+	if(state == "sliding"):
+		return
+	var prev_state = state
+	if(prev_state == "sliding"):
+		CROUCH_ANIMATION.play_backwards("slide")
+	set_state("crouching")
+	speed = crouch_speed
+	CROUCH_ANIMATION.play("crouch")
 
 func enter_slide_state():
 	#print("entering slide state")
-	return
+	set_state("sliding")
+	CROUCH_ANIMATION.play("slide")
 
 func enter_sprint_state():
+	if(state == "sliding"):
+		return
 	#print("entering sprint state")
-	var prev_state = state
-	if prev_state == "crouching":
+	var _prev_state = state
+	if _prev_state == "crouching":
 		CROUCH_ANIMATION.play_backwards("crouch")
-	state = "sprinting"
+	set_state("sprinting")
 	speed = sprint_speed
 
 
@@ -386,3 +428,8 @@ func _unhandled_input(event : InputEvent):
 			# Where we're going, we don't need InputMap
 			if event.keycode == 4194338: # F7
 				$UserInterface/DebugPanel.visible = !$UserInterface/DebugPanel.visible
+
+
+func _on_prev_state_timeout() -> void:
+	#print("previous state changed ! : " + prev_state)
+	prev_state = state
