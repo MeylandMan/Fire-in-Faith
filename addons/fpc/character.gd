@@ -16,6 +16,7 @@ extends CharacterBody3D
 ## The speed that the character moves at when crouching.
 @export var crouch_speed : float = 1.0
 
+@export var saved_direction : Vector2
 ## How fast the character speeds up and slows down when Motion Smoothing is on.
 @export var acceleration : float = 10.0
 ## How high the player jumps.
@@ -181,7 +182,12 @@ func _physics_process(delta):
 	
 	var input_dir = Vector2.ZERO
 	if !immobile: # Immobility works by interrupting user input, so other forces can still be applied to the player
-		input_dir = Input.get_vector(LEFT, RIGHT, FORWARD, BACKWARD)
+		if(state == "sliding"):
+			input_dir = Input.get_vector(LEFT, RIGHT, FORWARD, "NULL")
+		else:
+			input_dir = Input.get_vector(LEFT, RIGHT, FORWARD, BACKWARD)
+	if(input_dir != Vector2.ZERO):
+		saved_direction = input_dir.rotated(-HEAD.rotation.y)
 	handle_movement(delta, input_dir)
 
 	handle_head_rotation()
@@ -223,7 +229,11 @@ func handle_jumping():
 
 func handle_movement(delta, input_dir):
 	var direction = input_dir.rotated(-HEAD.rotation.y)
-	direction = Vector3(direction.x, 0, direction.y)
+	
+	if(state == "sliding"):
+		direction = Vector3(saved_direction.x, 0, saved_direction.y)
+	else:
+		direction = Vector3(direction.x, 0, direction.y)
 	move_and_slide()
 	
 	if motion_smoothing:
