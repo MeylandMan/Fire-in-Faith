@@ -60,8 +60,6 @@ extends CharacterBody3D
 @export_group("Feature Settings")
 ## Enable or disable jumping. Useful for restrictive storytelling environments.
 @export var jumping_enabled : bool = true
-## Wether the player can move in the air or not.
-@export var in_air_momentum : bool = true
 ## Smooths the feel of walking.
 @export var motion_smoothing : bool = true
 @export var sprint_enabled : bool = true
@@ -223,21 +221,12 @@ func handle_movement(delta, input_dir):
 	direction = Vector3(direction.x, 0, direction.y)
 	move_and_slide()
 	
-	if in_air_momentum:
-		if is_on_floor():
-			if motion_smoothing:
-				velocity.x = lerp(velocity.x, direction.x * speed, acceleration * delta)
-				velocity.z = lerp(velocity.z, direction.z * speed, acceleration * delta)
-			else:
-				velocity.x = direction.x * speed
-				velocity.z = direction.z * speed
+	if motion_smoothing:
+		velocity.x = lerp(velocity.x, direction.x * speed, acceleration * delta)
+		velocity.z = lerp(velocity.z, direction.z * speed, acceleration * delta)
 	else:
-		if motion_smoothing:
-			velocity.x = lerp(velocity.x, direction.x * speed, acceleration * delta)
-			velocity.z = lerp(velocity.z, direction.z * speed, acceleration * delta)
-		else:
-			velocity.x = direction.x * speed
-			velocity.z = direction.z * speed
+		velocity.x = direction.x * speed
+		velocity.z = direction.z * speed
 
 func handle_head_rotation():
 	HEAD.rotation_degrees.y -= mouseInput.x * mouse_sensitivity
@@ -287,7 +276,7 @@ func handle_state(moving):
 	
 	if crouch_enabled:
 		if crouch_mode == 0:
-			if Input.is_action_pressed(CROUCH) and state != "sprinting":
+			if Input.is_action_pressed(CROUCH):
 				if state != "crouching":
 					enter_crouch_state()
 			elif state == "crouching" and !$CrouchCeilingDetection.is_colliding():
@@ -314,10 +303,15 @@ func enter_normal_state():
 
 func enter_crouch_state():
 	#print("entering crouch state")
-	var prev_state = state
-	state = "crouching"
-	speed = crouch_speed
-	CROUCH_ANIMATION.play("crouch")
+	if(state != "sprinting"):
+		var prev_state = state
+		state = "crouching"
+		speed = crouch_speed
+		CROUCH_ANIMATION.play("crouch")
+
+func enter_slide_state():
+	#print("entering slide state")
+	return
 
 func enter_sprint_state():
 	#print("entering sprint state")
