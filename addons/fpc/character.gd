@@ -10,9 +10,9 @@ extends CharacterBody3D
 ## The settings for the character's movement and feel.
 @export_category("Character")
 ## The speed that the character moves at without crouching or sprinting.
-@export var base_speed : float = 3.0
+@export var base_speed : float = 6.0
 ## The speed that the character moves at when sprinting.
-@export var sprint_speed : float = 6.0
+@export var sprint_speed : float = 12.0
 ## The speed that the character moves at when crouching.
 @export var crouch_speed : float = 1.0
 
@@ -186,6 +186,8 @@ func _physics_process(delta):
 			input_dir = Input.get_vector(LEFT, RIGHT, FORWARD, "NULL")
 		else:
 			input_dir = Input.get_vector(LEFT, RIGHT, FORWARD, BACKWARD)
+	
+		
 	if(input_dir != Vector2.ZERO):
 		saved_direction = input_dir.rotated(-HEAD.rotation.y)
 	handle_movement(delta, input_dir)
@@ -266,7 +268,7 @@ func handle_head_rotation():
 func handle_state(moving):
 	if sprint_enabled:
 		if sprint_mode == 0:
-			if Input.is_action_pressed(SPRINT) and state != "crouching":
+			if Input.is_action_pressed(SPRINT) and state != "crouching" and !Input.is_action_pressed(BACKWARD):
 				if moving:
 					if state != "sprinting":
 						enter_sprint_state()
@@ -278,9 +280,9 @@ func handle_state(moving):
 		elif sprint_mode == 1:
 			if moving:
 				# If the player is holding sprint before moving, handle that cenerio
-				if Input.is_action_pressed(SPRINT) and state == "normal":
+				if Input.is_action_pressed(SPRINT) and state == "normal" and !Input.is_action_pressed(BACKWARD):
 					enter_sprint_state()
-				if Input.is_action_just_pressed(SPRINT):
+				if Input.is_action_just_pressed(SPRINT) and !Input.is_action_pressed(BACKWARD):
 					match state:
 						"normal":
 							enter_sprint_state()
@@ -366,6 +368,7 @@ func enter_slide_state():
 func enter_sprint_state():
 	if(state == "sliding"):
 		return
+	
 	#print("entering sprint state")
 	var _prev_state = state
 	if _prev_state == "crouching":
@@ -410,6 +413,7 @@ func headbob_animation(moving):
 
 
 func _process(delta):
+	print("speed : " + str(speed))
 	$UserInterface/DebugPanel.add_property("FPS", Performance.get_monitor(Performance.TIME_FPS), 0)
 	var status : String = state
 	if !is_on_floor():
